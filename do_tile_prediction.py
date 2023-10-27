@@ -11,14 +11,15 @@ import math
 from tondortools.tool import read_raster_info, save_raster, mosaic_tifs
 import tensorflow as tf
 
+
 tile = "21LYG"
 year = 2021
 acq_freq = 12
 number_bands = 3
-time_window = 120
+time_window = 30
 block_size = 256
-model_version = 'ver3'
-amazonas_root_folder = Path("/mnt/ssdarchive.nfs/amazonas_dir")
+model_version = 'ver6_RUnet'
+amazonas_root_folder = Path("/mnt/hddarchive.nfs/amazonas_dir")
 ########################################################################################################################
 model_folder = amazonas_root_folder.joinpath("model")
 model_filepath = model_folder.joinpath(f"model_{model_version}.h5")
@@ -35,6 +36,19 @@ detection_folder = output_folder.joinpath('ai_detection')
 detection_folder_aiversion = detection_folder.joinpath(f'{model_version}')
 os.makedirs(detection_folder_aiversion, exist_ok=True)
 ########################################################################################################################
+
+def cutoff_minmax_scale(numpy_array):
+    lower_cutoff = -30
+    # Step 1: Set all values less than -30 to 0
+    numpy_array[numpy_array < lower_cutoff] = 0
+
+    # Step 2: Use min-max scaling with min as -30 and max as 0
+    min_val = lower_cutoff
+    max_val = 0
+    scaled_arr = (numpy_array - min_val) / (max_val - min_val) * (1 - 0) + 0
+    return scaled_arr
+
+
 
 mosaic_files = os.listdir(output_folder_multiband_mosaic_tile_orbit)
 for mosaic_file in sorted(mosaic_files):
