@@ -55,10 +55,15 @@ def do_merging(input_data):
 
         # Process each group
         for date, files in file_groups.items():
+            if not str(date).startswith('2017'): continue
             if "VV" in files and "VH" in files:
                 vh_file = files["VH"]
                 vv_file = files["VV"]
 
+                merged_file_archive_path = os.path.join(archive_multiband_mosaic_tile_orbit_folder,
+                                                        f"{tile_item}_BAC_MERGED_{date}.tif")
+                if Path(merged_file_archive_path).exists():
+                    continue
                 # Calculate difference
                 vh_raster = gdal.Open(vh_file, gdal.GA_ReadOnly)
                 vv_raster = gdal.Open(vv_file, gdal.GA_ReadOnly)
@@ -76,7 +81,7 @@ def do_merging(input_data):
                 work_dir_file = Path(work_dir).joinpath(f"{tile_item}_BAC_MERGED_{date}")
                 os.makedirs(work_dir_file, exist_ok=True)
                 merged_file_local_path = work_dir_file.joinpath(f"{tile_item}_BAC_MERGED_{date}.tif")
-                merged_file_archive_path = os.path.join(archive_multiband_mosaic_tile_orbit_folder, f"{tile_item}_BAC_MERGED_{date}.tif")
+
                 three_band_array = np.stack((vh_band_scaled, vv_band_scaled, diff_scaled))
                 three_band_array = three_band_array
                 save_raster_template(vh_file, merged_file_local_path, three_band_array, GDT_UInt16, 0)
@@ -88,7 +93,7 @@ def do_merging(input_data):
 ######################################################
 amazonas_root_folder = Path("/mnt/hddarchive.nfs/amazonas_dir")
 #tile_list = ['18LVQ', '18LVR', '18NXH', '18NYH', '20LLP', '20LLQ', '20LMP', '21LYH', '22MBT', '22MGB']
-tile_list = ['21LYG']
+tile_list = ['18LVQ', '18LVR', '18LWR', '18NXG', '18NXH', '18NYH', '20LLP', '20LLQ', '20LMP', '20LMQ', '20NQF', '20NQG', '20NRG', '21LYG', '21LYH', '22MBT', '22MGB']
 process_cpu_count = 5
 ######################################################
 archive_folder = amazonas_root_folder.joinpath('output')

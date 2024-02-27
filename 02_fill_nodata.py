@@ -5,7 +5,7 @@ import numpy as np
 
 ######################################################
 amazonas_root_folder = Path("/mnt/hddarchive.nfs/amazonas_dir")
-tile_list = ['18LVQ', '18LVR', '18NXH', '18NYH', '20LLP', '20LLQ', '20LMP', '21LYH', '22MBT', '22MGB']
+tile_list = ['18LVQ', '18LVR', '18LWR', '18NXG', '18NXH', '18NYH', '20LLP', '20LLQ', '20LMP', '20LMQ', '20NQF', '20NQG', '20NRG', '21LYG', '21LYH', '22MBT', '22MGB']
 
 ######################################################
 archive_folder = amazonas_root_folder.joinpath('output')

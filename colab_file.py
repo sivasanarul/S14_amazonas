@@ -12,7 +12,7 @@ from tondortools.tool import read_raster_info
 import copy
 
 tile_list = ['21LYG', '18LVQ', '18LVR', '18NXH', '18NYH', '20LLP', '20LLQ', '20LMP', '21LYH', '22MBT', '22MGB']
-year = [2018, 2019]
+year = [2019, 2020]
 time_window = 60
 acq_freq = 12
 number_bands = 3
@@ -20,6 +20,8 @@ count_threshold = 1000
 block_size = 256
 min_labelpixel = 25
 use_mcd = True
+stack_training_in_one = True
+
 amazonas_root_folder = Path("/mnt/hddarchive.nfs/amazonas_dir")
 ########################################################################################################################
 output_folder = amazonas_root_folder.joinpath('output')
@@ -95,14 +97,23 @@ for tile_item in tile_list:
 data_list = []
 label_list = []
 
+pair_count = 0
 count = 0
 for detection_file, raster_list in detection_mosaic_pair.items():
 
-    count += 1
-    (xmin, ymax, RasterXSize, RasterYSize, pixel_width, projection, epsg, datatype, n_bands, imagery_extent_box) = read_raster_info(raster_list[0])
+    pair_count += 1
+    if pair_count > 2:
+        continue
+    print(f"pair count {pair_count}")
 
-    for x_block in range(0, RasterXSize+1, block_size):
-        for y_block in range(0, RasterYSize+1, block_size):
+    print(f"pair raster len {len(raster_list)}")
+
+    (xmin, ymax, RasterXSize, RasterYSize, pixel_width, projection, epsg, datatype, n_bands,
+     imagery_extent_box) = read_raster_info(raster_list[0])
+
+    for x_block in range(0, RasterXSize + 1, block_size):
+        for y_block in range(0, RasterYSize + 1, block_size):
+
 
             chunk_list = []
 
@@ -131,36 +142,30 @@ for detection_file, raster_list in detection_mosaic_pair.items():
 
             label_dataset = gdal.Open(str(detection_file))
             label_chunk = label_dataset.ReadAsArray(x_block, y_block, cols, rows)
-            chunk_list_array = np.array(chunk_list)
+
+            if stack_training_in_one:
+                chunk_list_array = np.array(chunk_list)
+                print(chunk_list_array.shape)
+                stacked_data = np.transpose(chunk_list_array, (1, 2, 0, 3)).reshape(256, 256, 15)
+            else:
+                chunk_list_array = np.array(chunk_list)
 
             num_non_zero = np.count_nonzero(label_chunk)
-            # if not num_non_zero > min_labelpixel:
-            #     save_np = False
+            if not num_non_zero > min_labelpixel:
+                save_np = False
+
             label_mask = copy.copy(label_chunk)
-
-            # stacked_data = np.transpose(chunk_list_array, (1, 2, 0, 3)).reshape(256, 256, 15)
-
-            # if save_np:
-            #     data_list.append(chunk_list_array)
-            #     label_list.append(label_chunk)
+            label_mask[label_mask > 0] = 1
 
             if save_np:
-                training_folder_data_npy = training_folder_data.joinpath(f"data_{count}.npy")
-                np.save(training_folder_data_npy, chunk_list_array)
+                print(f"shape {chunk_list_array.shape}")
+                if stack_training_in_one:
+                    print("chunk")
+                    data_list.append(stacked_data)
+                else:
+                    data_list.append(chunk_list_array)
 
-                training_folder_label_npy = training_folder_label.joinpath(f"label_{count}.npy")
-                np.save(training_folder_label_npy, label_mask)
+                label_list.append(label_mask)
 
-                count += 1
-                print(f" {count} with {num_non_zero} {Path(detection_file).name}--")
-#
-# for array in data_list:
-#     assert array.shape == (5, 256, 256, 3), "Array does not have the expected shape."
-#
-#
-# date_list_array = np.array(data_list)
-# label_list_array = np.array(label_list)
-#
-# print(date_list_array.shape)  # should be (num_samples, 5, 256, 256, 3)
-# print(label_list_array.shape)  # should be (num_samples, 256, 256, 1)
-#
+            count += 1
+print(f" number of chunks {len(data_list)} {len(label_list)}--")

@@ -4,7 +4,9 @@ import subprocess
 
 ######################################################
 amazonas_root_folder = Path("/mnt/hddarchive.nfs/amazonas_dir")
-tile_list = ['18LVQ', '18LVR', '18NXH', '18NYH', '20LLP', '20LLQ', '20LMP', '21LYH', '22MBT', '22MGB']
+#tile_list = ['18LVQ', '18LVR', '18NXH', '18NYH', '20LLP', '20LLQ', '20LMP', '21LYH', '22MBT', '22MGB']
+tile_list = ['18LWR', '18NXG', '20LMQ', '20NQF', '20NQG', '20LMQ', '20NQF', '20NQG', '20NRG', '21LYG']
+
 detection_set = "Detections_set6"
 ######################################################
 archive_folder = amazonas_root_folder.joinpath('output')
@@ -18,8 +20,9 @@ def download_from_s3(bucket_name, s3_path, local_path, config_path):
         '--config', config_path,
         "--log-level=INFO",
         "--no-gzip-encoding",
+        local_path,
         f'gisat:{bucket_name}/{s3_path}',
-        local_path
+
     ]
     result = subprocess.run(cmd, capture_output=True, text=True)
 

@@ -37,24 +37,31 @@ def load_data_from_folder(data_folder, label_folder, count = None):
         data_array = np.load(data_path)
         label_array = np.load(label_path)
 
-        data_list.append(data_array)
+        stacked_data = np.transpose(data_array, (1, 2, 0, 3)).reshape(256, 256, 15)
+
+        data_list.append(stacked_data)
         label_list.append(label_array)
 
     return np.array(data_list), np.array(label_list)
 
 
-model_version = 'ver7_cnntdlstm'
+
+
+model_version = 'ver7_Segmod'
 
 # Path to folders
 data_folder = '/mnt/hddarchive.nfs/amazonas_dir/training/data'
 label_folder = '/mnt/hddarchive.nfs/amazonas_dir/training/label'
 
+learning_rate = 0.001
+loss = 'binary_crossentropy'
 amazonas_root_folder = Path("/mnt/hddarchive.nfs/amazonas_dir")
 model_folder = amazonas_root_folder.joinpath("model")
 os.makedirs(model_folder, exist_ok=True)
 
 # Load data
-X, y = load_data_from_folder(data_folder, label_folder, count=10)
+X, y = load_data_from_folder(data_folder, label_folder, count=5000)
+
 
 # Split into training and validation sets
 x_train, x_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
@@ -64,23 +71,22 @@ print(y_train.shape)  # should be (num_samples, 256, 256, 1)
 
 
 # Create the model
-model = cnn_timedistributed_lstm2d(5, 256)
+model = build_vgg16_segmentation_bn((256, 256, 15))
+
+
 
 # Compile the model
-optimizer = Adam(learning_rate=0.001)
-model.compile(optimizer=optimizer, loss='binary_crossentropy', metrics=['accuracy'])
+optimizer = Adam(learning_rate=learning_rate)
+model.compile(optimizer=optimizer, loss=loss, metrics=['accuracy'])
 
-
-# Reduce learning rate when 'val_loss' has stopped improving
+# Callbacks
 reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=5, min_lr=0.0001, verbose=1)
-
-# Stop training when 'val_loss' has stopped improving for 10 epochs
 early_stop = EarlyStopping(monitor='val_loss', patience=5, verbose=1, restore_best_weights=True)
-
 callbacks = [reduce_lr, early_stop]
 
 # Train the model
 history = model.fit(x_train, y_train, validation_data=(x_val, y_val), epochs=25, batch_size=32, callbacks=callbacks)
+
 
 # Plot training & validation accuracy values
 plt.figure(figsize=(12, 6))
@@ -114,7 +120,7 @@ params = {
         "type": "Adam",
         "learning_rate": learning_rate
     },
-    "loss": "categorical_crossentropy",
+    "loss": loss,
     "metrics": ["accuracy"],
     "reduce_lr": {
         "monitor": "val_loss",
@@ -139,3 +145,4 @@ params = {
 json_filepath = model_folder.joinpath(f"params_{model_version}.json")
 with open(json_filepath, 'w') as json_file:
     json.dump(params, json_file, indent=4)
+print("Here")
