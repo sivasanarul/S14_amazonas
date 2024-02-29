@@ -63,7 +63,7 @@ def do_merging(input_data):
                 merged_file_archive_path = os.path.join(archive_multiband_mosaic_tile_orbit_folder,
                                                         f"{tile_item}_BAC_MERGED_{date}.tif")
                 if Path(merged_file_archive_path).exists():
-                    continue
+                    Path(merged_file_archive_path).unlink()
                 # Calculate difference
                 vh_raster = gdal.Open(vh_file, gdal.GA_ReadOnly)
                 vv_raster = gdal.Open(vv_file, gdal.GA_ReadOnly)

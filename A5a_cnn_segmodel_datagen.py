@@ -48,6 +48,7 @@ cnn_training_tiles = os.listdir(cnn_training_folder)
 
 learning_rate = 0.001
 cutoff_prob = 0.5
+batch_size = 8
 loss = 'binary_crossentropy'
 amazonas_root_folder = Path("/mnt/hddarchive.nfs/amazonas_dir")
 model_folder = amazonas_root_folder.joinpath("ref_model")
@@ -58,11 +59,11 @@ os.makedirs(model_folder, exist_ok=True)
 
 
 
-model_version = "build_vgg16_segmentation_ref_normalingestion"
+model_version = "build_vgg16_segmentation_batchingestion"
 stack_training_in_one = True
 TRAIN_NEW_MODEL = False
 
-def load_data_from_pairs(label_training_pairs, flip_horizontal = False, flip_vertical = False):
+def load_data_from_pairs(label_training_pairs):
     data_list, label_list = [], []
     for label_training_pair_item in label_training_pairs:
         label_path = label_training_pair_item["label"]
@@ -75,26 +76,65 @@ def load_data_from_pairs(label_training_pairs, flip_horizontal = False, flip_ver
         data_list.append(data_array)
         label_list.append(transposed_label_array)
 
-        # Apply horizontal flip
-        if flip_horizontal:
-            stacked_data_flip_hori = np.flip(data_array, axis=1)
-            label_array_flip_hori = np.flip(transposed_label_array, axis=1)
-
-            data_list.append(stacked_data_flip_hori)
-            label_list.append(label_array_flip_hori)
-
-        # Apply vertical flip
-        if flip_vertical:
-            stacked_data_flip_vert = np.flip(data_array, axis=0)
-            label_array_flip_vert = np.flip(transposed_label_array, axis=0)
-
-            data_list.append(stacked_data_flip_vert)
-            label_list.append(label_array_flip_vert)
-
     return np.array(data_list), np.array(label_list)
 
 
 
+
+class SegmentationDataGenerator(keras.utils.Sequence):
+    def __init__(self, dataset, batch_size=8, target_size=(256, 256), shuffle=True, flip_horizontal=False,
+                     flip_vertical=False):
+        self.dataset = dataset
+        self.batch_size = batch_size
+        self.target_size = target_size
+        self.shuffle = shuffle
+        self.flip_horizontal = flip_horizontal
+        self.flip_vertical = flip_vertical
+        self.on_epoch_end()
+
+    def __len__(self):
+        return len(self.dataset) // self.batch_size
+
+    def __getitem__(self, index):
+        batch_dataset = self.dataset[index * self.batch_size:(index + 1) * self.batch_size]
+        x, y = self.__data_generation(batch_dataset)
+        return x, y
+
+    def on_epoch_end(self):
+        if self.shuffle:
+            np.random.shuffle(self.dataset)
+
+    def __data_generation(self, detection_mosaic_pair):
+        data_list, label_list = [], []
+        for detection_mosaic_pair_item in detection_mosaic_pair:
+
+            label_path = detection_mosaic_pair_item["label"]
+            data_path = detection_mosaic_pair_item["training"]
+
+            data_array = np.load(data_path)
+            label_array = np.load(label_path)
+            transposed_label_array = np.transpose(label_array, (1, 2, 0))
+
+            data_list.append(data_array)
+            label_list.append(transposed_label_array)
+
+            # Apply horizontal flip
+            if self.flip_horizontal:
+                stacked_data_flip_hori = np.flip(data_array, axis=1)
+                label_array_flip_hori = np.flip(transposed_label_array, axis=1)
+
+                data_list.append(stacked_data_flip_hori)
+                label_list.append(label_array_flip_hori)
+
+            # Apply vertical flip
+            if self.flip_vertical:
+                stacked_data_flip_vert = np.flip(data_array, axis=0)
+                label_array_flip_vert = np.flip(transposed_label_array, axis=0)
+
+                data_list.append(stacked_data_flip_vert)
+                label_list.append(label_array_flip_vert)
+
+        return np.array(data_list), np.array(label_list)
 
 
 label_training_pairs = []
@@ -109,7 +149,6 @@ for data_file in data_files:
         label_training_pairs.append(label_training_pair_dict)
 print(f"label_training_pairs: {len(label_training_pairs)}")
 
-
 # Split dataset into training + validation (80%) and test (20%)
 train_val_dataset, test_dataset = train_test_split(label_training_pairs, test_size=0.1, random_state=42)
 
@@ -120,14 +159,30 @@ print(f"Training set size: {len(train_dataset)}")
 print(f"Validation set size: {len(val_dataset)}")
 print(f"Test set size: {len(test_dataset)}")
 
+train_dataset = train_dataset[0:300]
+# Create data generators for training and validation sets
+train_generator = SegmentationDataGenerator(train_dataset, batch_size=batch_size, target_size=(256, 256),
+                                            flip_horizontal=True, flip_vertical=True)
+val_generator = SegmentationDataGenerator(val_dataset, batch_size=batch_size, target_size=(256, 256))
+print("----------------------")
+print("--- train steps, shape, val steps ---")
+train_steps = train_generator.__len__()
+print(train_steps)
+X,y = train_generator.__getitem__(1)
+print(X.shape)
+print(y.shape)
+val_steps = val_generator.__len__()
+print(val_steps)
+print("----------------------")
+
+
+
 # Create the model
 model = build_vgg16_segmentation_bn((256, 256, 3))
 
 model_filepath = model_folder.joinpath(f"model_{model_version}.h5")
 
 if not model_filepath.exists() or TRAIN_NEW_MODEL:
-    X_train, y_train = load_data_from_pairs(train_dataset, flip_horizontal= True, flip_vertical=True)
-    X_val, y_val = load_data_from_pairs(val_dataset)
 
     # Compile the model
     optimizer = Adam(learning_rate=learning_rate)
@@ -138,7 +193,7 @@ if not model_filepath.exists() or TRAIN_NEW_MODEL:
     early_stop = EarlyStopping(monitor='val_loss', patience=3, verbose=1, restore_best_weights=True)
     callbacks = [reduce_lr, early_stop]
 
-    history = model.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=25, batch_size=32, callbacks=callbacks, use_multiprocessing=True,
+    history = model.fit(train_generator, validation_data=val_generator, epochs=15, batch_size=32, callbacks=callbacks, use_multiprocessing=True,
                                   workers=6)
 
 
