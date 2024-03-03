@@ -48,7 +48,7 @@ amazonas_root_folder = Path("/mnt/hddarchive.nfs/amazonas_dir")
 gfw_extents_filename = "gftw_tileextents.gpkg"
 s2_extents = "S2_tiles.gpkg"
 
-ref_year = 2021
+ref_year = 2017
 ###
 support_data = amazonas_root_folder.joinpath("support_data")
 if not support_data.exists(): raise Exception(f"{support_data} doesnt exists.")
@@ -65,7 +65,7 @@ os.makedirs(work_dir, exist_ok=True)
 
 
 archive_folder = amazonas_root_folder.joinpath("output")
-archive_mosaic_folder = archive_folder.joinpath("Multiband_mosaic_from_2020")
+archive_mosaic_folder = archive_folder.joinpath("Multiband_mosaic")
 
 
 

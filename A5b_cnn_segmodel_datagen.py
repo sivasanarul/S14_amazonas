@@ -6,6 +6,7 @@ import json
 from sklearn.model_selection import train_test_split
 import os
 import numpy as np
+import h5py
 
 from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, UpSampling2D, Concatenate, ConvLSTM2D, BatchNormalization, Dropout
 # from keras.optimizers import Adam
@@ -31,149 +32,99 @@ except:
 amazonas_root_folder = Path("/mnt/hddarchive.nfs/amazonas_dir")
 support_data = amazonas_root_folder.joinpath("support_data")
 merged_sar_ref_folder = support_data.joinpath(f"merged_sar_ref_worldcover")
-
+model_folder = amazonas_root_folder.joinpath("ref_model")
 
 
 
 ref_training_folder = amazonas_root_folder.joinpath("ref_training")
 cnn_training_folder = ref_training_folder.joinpath("data")
 cnn_label_folder = ref_training_folder.joinpath("label")
-
-cnn_label_tiles = os.listdir(cnn_label_folder)
-cnn_training_tiles = os.listdir(cnn_training_folder)
-
+training_folder_hdf5 = ref_training_folder.joinpath('hdf5_folder')
+hdf5_file = training_folder_hdf5.joinpath('combined_dataset.hdf5')
 
 
+def train_val_split(hdf5_file, val_split=0.2):
+    """Split the data into training and validation sets."""
+    with h5py.File(hdf5_file, 'r') as f:
+        num_samples = f['data'].shape[0]
+    indices = np.arange(num_samples)
+
+    # Split into training and temp (temp combines validation and test)
+    train_val_indices, test_indices = train_test_split(indices, test_size=0.1, random_state=42)
+
+    # Split the temp set into validation and test
+    train_indices, val_indices = train_test_split(train_val_indices, test_size=0.2, random_state=42)
+
+    return train_indices, val_indices, test_indices
 
 
-learning_rate = 0.01
+def data_generator(hdf5_file, indices, batch_size, augment = True):
+    """A generator that yields batches of data and labels."""
+    with h5py.File(hdf5_file, 'r') as f:
+        while True:
+            # Shuffle indices each epoch
+            np.random.shuffle(indices)
+            for start in range(0, len(indices), batch_size):
+                end = min(start + batch_size, len(indices))
+                batch_indices = indices[start:end]
+
+                # Sort the batch indices to avoid the TypeError
+                sorted_batch_indices = np.sort(batch_indices)
+
+                # Fetch the batch of data and labels using sorted indices
+                data_batch = f['data'][sorted_batch_indices]
+                label_batch = f['label'][sorted_batch_indices]
+
+                # Transpose label_batch if it has 3 dimensions
+                if label_batch.ndim == 3:
+                    label_batch = np.transpose(label_batch, (1, 2, 0))
+                elif label_batch.ndim > 3:
+                    # Adjust the transpose dimensions based on your actual data shape
+                    # This is just an example for 3D; adapt it for your specific case
+                    label_batch = np.transpose(label_batch, (0, 2, 3, 1))
+
+                data_aug_list = []
+                label_aug_list = []
+                if augment:
+                    for i in range(data_batch.shape[0]):
+                        # Flip horizontally
+                        data_batch_flip_hori = np.flip(data_batch[1], axis=1)
+                        label_batch_flip_hori = np.flip(label_batch[i], axis=1)
+                        data_aug_list.append(data_batch_flip_hori)
+                        label_aug_list.append(label_batch_flip_hori)
+
+                        # Flip vertically
+                        data_batch_flip_vert = np.flip(data_batch[i], axis=0)
+                        label_batch_flip_vert = np.flip(label_batch[i], axis=0)
+                        data_aug_list.append(data_batch_flip_vert)
+                        label_aug_list.append(label_batch_flip_vert)
+                    data_batch_full = np.concatenate((data_batch, np.array(data_aug_list)), axis=0)
+                    label_batch_full = np.concatenate((label_batch, np.array(label_aug_list)), axis=0)
+                else:
+                    data_batch_full = data_batch
+                    label_batch_full = label_batch
+
+                yield data_batch_full, label_batch_full
+
+
+# File path
+batch_size = 50
+model_version = "build_vgg16_segmentation_hdf5ingestion"
+learning_rate = 0.001
 cutoff_prob = 0.5
-batch_size = 30
 loss = 'binary_crossentropy'
-amazonas_root_folder = Path("/mnt/hddarchive.nfs/amazonas_dir")
-model_folder = amazonas_root_folder.joinpath("ref_model")
-os.makedirs(model_folder, exist_ok=True)
-
-
-
-
-
-
-model_version = "build_vgg16_segmentation_batchingestion_thirdrun"
-stack_training_in_one = True
 TRAIN_NEW_MODEL = False
 
-def load_data_from_pairs(label_training_pairs):
-    data_list, label_list = [], []
-    for label_training_pair_item in label_training_pairs:
-        label_path = label_training_pair_item["label"]
-        data_path = label_training_pair_item["training"]
+# Split the data
+train_indices, val_indices, test_indices = train_val_split(hdf5_file, val_split=0.1)
 
-        data_array = np.load(data_path).astype(np.uint16)
-        label_array = np.load(label_path).astype(np.uint16)
-        transposed_label_array = np.transpose(label_array, (1, 2, 0))
-
-        data_list.append(data_array)
-        label_list.append(transposed_label_array)
-
-    return np.array(data_list), np.array(label_list)
+# Create the generators
+train_gen = data_generator(hdf5_file, train_indices, batch_size, augment=True)
+val_gen = data_generator(hdf5_file, val_indices, batch_size)
 
 
-
-
-class SegmentationDataGenerator(keras.utils.Sequence):
-    def __init__(self, dataset, batch_size=8, target_size=(256, 256), shuffle=True, flip_horizontal=False,
-                     flip_vertical=False):
-        self.dataset = dataset
-        self.batch_size = batch_size
-        self.target_size = target_size
-        self.shuffle = shuffle
-        self.flip_horizontal = flip_horizontal
-        self.flip_vertical = flip_vertical
-        self.on_epoch_end()
-
-    def __len__(self):
-        return len(self.dataset) // self.batch_size
-
-    def __getitem__(self, index):
-        batch_dataset = self.dataset[index * self.batch_size:(index + 1) * self.batch_size]
-        x, y = self.__data_generation(batch_dataset)
-        return x, y
-
-    def on_epoch_end(self):
-        if self.shuffle:
-            np.random.shuffle(self.dataset)
-
-    def __data_generation(self, detection_mosaic_pair):
-        data_list, label_list = [], []
-        for detection_mosaic_pair_item in detection_mosaic_pair:
-
-            label_path = detection_mosaic_pair_item["label"]
-            data_path = detection_mosaic_pair_item["training"]
-
-            data_array = np.load(data_path).astype(np.uint16)
-            label_array = np.load(label_path).astype(np.uint16)
-            transposed_label_array = np.transpose(label_array, (1, 2, 0))
-
-            data_list.append(data_array)
-            label_list.append(transposed_label_array)
-
-            # Apply horizontal flip
-            if self.flip_horizontal:
-                stacked_data_flip_hori = np.flip(data_array, axis=1)
-                label_array_flip_hori = np.flip(transposed_label_array, axis=1)
-
-                data_list.append(stacked_data_flip_hori)
-                label_list.append(label_array_flip_hori)
-
-            # Apply vertical flip
-            if self.flip_vertical:
-                stacked_data_flip_vert = np.flip(data_array, axis=0)
-                label_array_flip_vert = np.flip(transposed_label_array, axis=0)
-
-                data_list.append(stacked_data_flip_vert)
-                label_list.append(label_array_flip_vert)
-
-        return np.array(data_list), np.array(label_list)
-
-
-label_training_pairs = []
-data_files = sorted([f for f in os.listdir(cnn_training_folder) if f.startswith('data_') and f.endswith('.npy')])
-label_files = sorted([f for f in os.listdir(cnn_label_folder) if f.startswith('label_') and f.endswith('.npy')])
-for data_file in data_files:
-    data_file_index = data_file.split('_')[1].split('.')[0]
-    label_file_name = f"label_{data_file_index}.npy"
-    if cnn_label_folder.joinpath(label_file_name).exists():
-        label_training_pair_dict = {"label": str(cnn_label_folder.joinpath(label_file_name)),
-                                    "training": str(cnn_training_folder.joinpath(data_file))}
-        label_training_pairs.append(label_training_pair_dict)
-print(f"label_training_pairs: {len(label_training_pairs)}")
-
-# Split dataset into training + validation (80%) and test (20%)
-train_val_dataset, test_dataset = train_test_split(label_training_pairs, test_size=0.1, random_state=4)
-
-# Split training + validation into actual training (64%) and validation (16%) sets
-train_dataset, val_dataset = train_test_split(train_val_dataset, test_size=0.2, random_state=4)
-print("----------------------")
-print(f"Training set size: {len(train_dataset)}")
-print(f"Validation set size: {len(val_dataset)}")
-print(f"Test set size: {len(test_dataset)}")
-
-# Create data generators for training and validation sets
-train_generator = SegmentationDataGenerator(train_dataset, batch_size=batch_size, target_size=(256, 256),
-                                            flip_horizontal=True, flip_vertical=True)
-val_generator = SegmentationDataGenerator(val_dataset, batch_size=batch_size, target_size=(256, 256))
-print("----------------------")
-print("--- train steps, shape, val steps ---")
-train_steps = train_generator.__len__()
-print(train_steps)
-X,y = train_generator.__getitem__(1)
-print(X.shape)
-print(y.shape)
-val_steps = val_generator.__len__()
-print(val_steps)
-print("----------------------")
-
+# Extract the first batch
+first_batch_data, first_batch_labels = next(train_gen)
 
 
 # Create the model
@@ -192,8 +143,8 @@ if not model_filepath.exists() or TRAIN_NEW_MODEL:
     early_stop = EarlyStopping(monitor='val_loss', patience=3, verbose=1, restore_best_weights=True)
     callbacks = [reduce_lr, early_stop]
 
-    history = model.fit(train_generator, validation_data=val_generator, epochs=15, batch_size=batch_size, callbacks=callbacks, use_multiprocessing=True,
-                                  workers=3)
+    history = model.fit(train_gen, validation_data=val_gen, epochs=15, batch_size=32, callbacks=callbacks, use_multiprocessing=True,
+                                  workers=6)
 
 
     # Plot training & validation accuracy values
