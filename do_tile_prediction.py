@@ -65,7 +65,8 @@ for mosaic_file in sorted(mosaic_files):
 
     print(f"{mosaic_file} -- > {sorted(raster_list)}")
 
-    mosaic_workdir = work_dir.joinpath(mosaic_file)
+    mosaic_workdir =     mosaic_workdir = work_dir.joinpath(mosaic_file)
+    os.makedirs(mosaic_workdir, exist_ok=True).joinpath(mosaic_file)
     os.makedirs(mosaic_workdir, exist_ok=True)
 
     (xmin, ymax, RasterXSize, RasterYSize, pixel_width, projection, epsg, datatype, n_bands,
