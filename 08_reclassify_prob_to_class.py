@@ -1,0 +1,55 @@
+from pathlib import Path
+import os, requests
+import subprocess
+import geopandas as gpd
+import json
+from osgeo import gdal
+from gdalconst import GDT_Byte, GDT_Float32
+import numpy as np
+from datetime import datetime, timedelta, date
+import math
+from tondortools.tool import read_raster_info, save_raster, mosaic_tifs, save_raster_template
+import tensorflow as tf
+
+
+tiles = ['18LVQ',  '18LVR',  '20LLQ',  '18LWR',  '18NYH',  '18NXH',  '20LLP',  '18NXG',  '20LMP',  '20LMQ',  '20NQG']
+
+cutoff_prob = 0.2
+model_version = 'ver7_Segmod'
+amazonas_root_folder = Path("/mnt/hddarchive.nfs/amazonas_dir")
+########################################################################################################################
+output_folder = amazonas_root_folder.joinpath('output')
+detection_folder = output_folder.joinpath('ai_detection')
+detection_folder_aiversion = detection_folder.joinpath(f'{model_version}')
+########################################################################################################################
+support_data = amazonas_root_folder.joinpath("support_data")
+merged_sar_ref_folder = support_data.joinpath(f"ref_worldcover_sarmosaic")
+predicted_baselc_folder = support_data.joinpath(f"base_worldcover_prediction")
+########################################################################################################################
+
+
+for tile_item in tiles:
+    # / mnt / hddarchive.nfs / amazonas_dir / support_data / base_worldcover_prediction / 18L
+    # VQ_BASELC_2017_CLASS.tif
+    base_lc_tile_filepath = predicted_baselc_folder.joinpath(f"{tile_item}_BASELC_2017_CLASS.tif")
+    if not base_lc_tile_filepath.exists(): raise Exception(f"{base_lc_tile_filepath} does not exist")
+    dataset = gdal.Open(str(base_lc_tile_filepath))
+    chunk = dataset.GetRasterBand(1).ReadAsArray()
+
+    detection_folder_aiversion_tile = detection_folder.joinpath(f'{model_version}', tile_item)
+    folder_files_list = os.listdir(detection_folder_aiversion_tile)
+    for folder_files_list_item in folder_files_list:
+        if not "_PROB" in folder_files_list_item: continue
+
+
+        probablity_filepath = detection_folder_aiversion_tile.joinpath(folder_files_list_item)
+        print(f"reclassifying {probablity_filepath}")
+
+        dataset = gdal.Open(str(probablity_filepath))
+        chunk = dataset.GetRasterBand(1).ReadAsArray()
+
+        mosaic_detection_class_path = probablity_filepath.parent.joinpath(probablity_filepath.name.replace("_PROB", "_CLASS"))
+        prediction_class = (chunk > cutoff_prob).astype(np.byte)
+        save_raster_template(str(probablity_filepath), str(mosaic_detection_class_path),
+                             prediction_class, GDT_Byte, nodata_value=None)
+        print(f"creating {mosaic_detection_class_path}")

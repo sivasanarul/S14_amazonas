@@ -59,14 +59,6 @@ for tile_item in tiles:
     (xmin, ymax, RasterXSize, RasterYSize, pixel_width, projection, epsg, datatype, n_bands,
      imagery_extent_box) = read_raster_info(str(tile_prediction_year_mosaic_tif))
 
-
-    def adjust_window_position(size, start, window_size):
-        # Adjust window position if it goes beyond the image size
-        if start + window_size > size:
-            start = size - window_size
-        return start
-
-
     window_size = block_size
     # first lets do the four corners
     window = dataset.ReadAsArray(0, 0, window_size, window_size)

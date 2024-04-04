@@ -12,7 +12,7 @@ work_dir = amazonas_root_folder.joinpath("work_dir")
 support_data = amazonas_root_folder.joinpath("support_data")
 ########################################################################################################################
 ########################################################################################################################
-training_folder = amazonas_root_folder.joinpath('ref_training')
+training_folder = amazonas_root_folder.joinpath('training')
 training_folder_label = training_folder.joinpath('label')
 training_folder_data = training_folder.joinpath('data')
 training_folder_hdf5 = training_folder.joinpath('hdf5_folder')
@@ -23,7 +23,7 @@ os.makedirs(training_folder_hdf5, exist_ok=True)
 # Paths to your folders
 data_folder = training_folder_data
 label_folder = training_folder_label
-output_hdf5_file = training_folder_hdf5.joinpath('combined_dataset_ver2.hdf5')
+output_hdf5_file = training_folder_hdf5.joinpath('combined_dataset.hdf5')
 
 # Initialize lists to hold file paths
 data_files = [os.path.join(data_folder, f) for f in sorted(os.listdir(data_folder)) if f.startswith('data_')]
@@ -48,11 +48,13 @@ with h5py.File(output_hdf5_file, 'w') as h5f:
         # Load the data and label
         data_file = data_folder.joinpath(f"data_{i+1}.npy")
         label_file = label_folder.joinpath(f"label_{i+1}.npy")
-        data = np.load(data_file)
-        label = np.load(label_file)
+        if data_file.exists() and label_file.exists():
+            data = np.load(data_file)
+            label = np.load(label_file)
 
-        # Write the data and label to the respective dataset in the HDF5 file
-        data_set[i, ...] = data
-        label_set[i, ...] = label
-
+            # Write the data and label to the respective dataset in the HDF5 file
+            data_set[i, ...] = data
+            label_set[i, ...] = label
+        else:
+            print(f"couldnt find {i}")
 print("Data and labels have been successfully saved to HDF5.")

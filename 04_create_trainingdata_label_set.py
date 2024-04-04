@@ -11,7 +11,7 @@ import math
 from tondortools.tool import read_raster_info
 import copy
 
-tile_list = ['21LYG', '18LVQ', '18LVR', '18NXH', '18NYH', '20LLP', '20LLQ', '20LMP', '21LYH', '22MBT', '22MGB']
+tile_list = ['18LVQ',  '18LVR',  '20LLQ',  '18LWR',  '18NYH',  '18NXH',  '20LLP',  '18NXG',  '20LMP',  '20LMQ',  '20NQG',  '21LYG',  '20NQF',  '20NRG',  '21LYH',  '22MBT',  '22MGB']
 year = [2018, 2019]
 time_window = 60
 acq_freq = 12
@@ -88,17 +88,20 @@ for tile_item in tile_list:
                     if (mosaic_date <= acq_date) and (mosaic_date > acq_date - timedelta(days=time_window)):
                         mosaic_file_list.append(output_folder_multiband_mosaic_tile_orbit.joinpath(mosaic_file))
                 if len(mosaic_file_list) == math.floor(time_window/acq_freq):
-                    detection_mosaic_pair[detection_filepath] = sorted(mosaic_file_list)
+                    detection_mosaic_pair[detection_filepath] = {"raster_list":sorted(mosaic_file_list),
+                                                                 "tile": tile_item}
 
     print(f"detection mosaic pair count {len(detection_mosaic_pair)}")
 
 data_list = []
 label_list = []
 
-count = 0
-for detection_file, raster_list in detection_mosaic_pair.items():
+count = 1
+for detection_file, tile_raster_list_dict in detection_mosaic_pair.items():
 
-    count += 1
+    raster_list = tile_raster_list_dict["raster_list"]
+    tile_name = tile_raster_list_dict["tile"]
+
     (xmin, ymax, RasterXSize, RasterYSize, pixel_width, projection, epsg, datatype, n_bands, imagery_extent_box) = read_raster_info(raster_list[0])
 
     for x_block in range(0, RasterXSize+1, block_size):
@@ -134,15 +137,8 @@ for detection_file, raster_list in detection_mosaic_pair.items():
             chunk_list_array = np.array(chunk_list)
 
             num_non_zero = np.count_nonzero(label_chunk)
-            # if not num_non_zero > min_labelpixel:
-            #     save_np = False
             label_mask = copy.copy(label_chunk)
 
-            # stacked_data = np.transpose(chunk_list_array, (1, 2, 0, 3)).reshape(256, 256, 15)
-
-            # if save_np:
-            #     data_list.append(chunk_list_array)
-            #     label_list.append(label_chunk)
 
             if save_np:
                 training_folder_data_npy = training_folder_data.joinpath(f"data_{count}.npy")
@@ -151,16 +147,10 @@ for detection_file, raster_list in detection_mosaic_pair.items():
                 training_folder_label_npy = training_folder_label.joinpath(f"label_{count}.npy")
                 np.save(training_folder_label_npy, label_mask)
 
+                if training_folder_data_npy.exists() and training_folder_label_npy.exists():
+                    if count % 100 == 0:
+                        print(f"{tile_name} -- {count} with {num_non_zero} {Path(detection_file).name}--")
+                else:
+                    raise Exception(f"something is wrong")
+
                 count += 1
-                print(f" {count} with {num_non_zero} {Path(detection_file).name}--")
-#
-# for array in data_list:
-#     assert array.shape == (5, 256, 256, 3), "Array does not have the expected shape."
-#
-#
-# date_list_array = np.array(data_list)
-# label_list_array = np.array(label_list)
-#
-# print(date_list_array.shape)  # should be (num_samples, 5, 256, 256, 3)
-# print(label_list_array.shape)  # should be (num_samples, 256, 256, 1)
-#

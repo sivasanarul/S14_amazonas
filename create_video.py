@@ -3,26 +3,40 @@ import matplotlib.pyplot as plt
 import rasterio
 import os
 import numpy as np
+from pathlib import Path
+
+
+
 
 # Directory containing the raster images
-raster_dir = '/mnt/hddarchive.nfs/amazonas_dir/output/ai_detection/ver7_Segmod'
-raster_files = [
-    '21LYG_BAC_MERGED_20210505.tif', '21LYG_BAC_MERGED_20210517.tif',
-    '21LYG_BAC_MERGED_20210529.tif', '21LYG_BAC_MERGED_20210610.tif',
-    '21LYG_BAC_MERGED_20210622.tif', '21LYG_BAC_MERGED_20210704.tif',
-    '21LYG_BAC_MERGED_20210716.tif', '21LYG_BAC_MERGED_20210728.tif'
-]
+model_version = 'ver7_Segmod'
+
+
+
+amazonas_root_folder = Path("/mnt/hddarchive.nfs/amazonas_dir")
+output_folder = amazonas_root_folder.joinpath('output')
+detection_folder = output_folder.joinpath('ai_detection')
+detection_folder_aiversion = detection_folder.joinpath(f'{model_version}')
+
+
+
+raster_dir = '/mnt/hddarchive.nfs/amazonas_dir/output/ai_detection/ver7_Segmod/reclassified/sieved'
+input_rasters = []
+raster_files = os.listdir(raster_dir)
+for file in sorted(raster_files):
+    if "_CLASS" in file:
+        input_rasters.append(Path(raster_dir).joinpath(file))
 
 # Video output settings
-video_name = 'output_video2.avi'
+video_name = 'output_video5_reclassified.avi'
 fps = 1  # Frames per second
 
 # Initialize video writer with H.264 codec
 fourcc = cv2.VideoWriter_fourcc(*'MJPG')
 video = None
-for file in raster_files:
+for file in input_rasters:
     # Extract date from filename
-    date = file.split('_')[3][:8]
+    date = file.name.split('_')[1]
 
     # Read the raster file
     with rasterio.open(os.path.join(raster_dir, file)) as src:

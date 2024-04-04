@@ -59,7 +59,7 @@ os.makedirs(model_folder, exist_ok=True)
 
 
 
-model_version = "build_vgg16_segmentation_batchingestion_thirdrun"
+model_version = "build_vgg16_segmentation_batchingestion_fourthrun"
 stack_training_in_one = True
 TRAIN_NEW_MODEL = False
 
@@ -192,8 +192,8 @@ if not model_filepath.exists() or TRAIN_NEW_MODEL:
     early_stop = EarlyStopping(monitor='val_loss', patience=3, verbose=1, restore_best_weights=True)
     callbacks = [reduce_lr, early_stop]
 
-    history = model.fit(train_generator, validation_data=val_generator, epochs=15, batch_size=batch_size, callbacks=callbacks, use_multiprocessing=True,
-                                  workers=3)
+    history = model.fit(train_generator, validation_data=val_generator, epochs=25, batch_size=batch_size, callbacks=callbacks, use_multiprocessing=True,
+                                  workers=5)
 
 
     # Plot training & validation accuracy values

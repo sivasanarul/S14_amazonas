@@ -13,7 +13,8 @@ import tensorflow as tf
 
 
 tile = "21LYG"
-year = 2021
+year_from = 2018
+year_to = 2021
 acq_freq = 12
 number_bands = 3
 time_window = 60
@@ -24,7 +25,9 @@ amazonas_root_folder = Path("/mnt/hddarchive.nfs/amazonas_dir")
 model_folder = amazonas_root_folder.joinpath("model")
 model_filepath = model_folder.joinpath(f"model_{model_version}.h5")
 loaded_model = tf.keras.models.load_model(model_filepath)
-
+########################################################################################################################
+#/mnt/hddarchive.nfs/amazonas_dir/support_data/base_worldcover_prediction/18LVQ_BASELC_2017_CLASS.tif
+base_worldcover_folder = amazonas_root_folder.joinpath("support_data", "base_worldcover_prediction")
 ########################################################################################################################
 output_folder = amazonas_root_folder.joinpath('output')
 output_folder_multiband_mosaic = output_folder.joinpath('Multiband_mosaic')
@@ -36,19 +39,6 @@ detection_folder = output_folder.joinpath('ai_detection')
 detection_folder_aiversion = detection_folder.joinpath(f'{model_version}')
 os.makedirs(detection_folder_aiversion, exist_ok=True)
 ########################################################################################################################
-
-def cutoff_minmax_scale(numpy_array):
-    lower_cutoff = -30
-    # Step 1: Set all values less than -30 to 0
-    numpy_array[numpy_array < lower_cutoff] = 0
-
-    # Step 2: Use min-max scaling with min as -30 and max as 0
-    min_val = lower_cutoff
-    max_val = 0
-    scaled_arr = (numpy_array - min_val) / (max_val - min_val) * (1 - 0) + 0
-    return scaled_arr
-
-
 
 mosaic_files = os.listdir(output_folder_multiband_mosaic_tile_orbit)
 for mosaic_file in sorted(mosaic_files):
