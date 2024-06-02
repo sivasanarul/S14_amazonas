@@ -12,7 +12,7 @@ from tondortools.tool import read_raster_info, save_raster, mosaic_tifs, save_ra
 import tensorflow as tf
 
 
-tiles = ['18LVQ',  '18LVR',  '20LLQ',  '18LWR',  '18NYH',  '18NXH',  '20LLP',  '18NXG',  '20LMP',  '20LMQ',  '20NQG']
+tiles = ['18LVQ', '18LVR', '18LWR', '18NXG', '18NXH', '18NYH', '20LLP', '20LLQ', '20LMP', '20LMQ', '20NQF', '20NQG', '20NRG', '21LYG', '21LYH', '22MBT', '22MGB']
 
 cutoff_prob = 0.2
 model_version = 'ver7_Segmod'
@@ -31,10 +31,10 @@ predicted_baselc_folder = support_data.joinpath(f"base_worldcover_prediction")
 for tile_item in tiles:
     # / mnt / hddarchive.nfs / amazonas_dir / support_data / base_worldcover_prediction / 18L
     # VQ_BASELC_2017_CLASS.tif
-    base_lc_tile_filepath = predicted_baselc_folder.joinpath(f"{tile_item}_BASELC_2017_CLASS.tif")
-    if not base_lc_tile_filepath.exists(): raise Exception(f"{base_lc_tile_filepath} does not exist")
-    dataset = gdal.Open(str(base_lc_tile_filepath))
-    chunk = dataset.GetRasterBand(1).ReadAsArray()
+    # base_lc_tile_filepath = predicted_baselc_folder.joinpath(f"{tile_item}_BASELC_2017_CLASS.tif")
+    # if not base_lc_tile_filepath.exists(): raise Exception(f"{base_lc_tile_filepath} does not exist")
+    # dataset = gdal.Open(str(base_lc_tile_filepath))
+    # chunk = dataset.GetRasterBand(1).ReadAsArray()
 
     detection_folder_aiversion_tile = detection_folder.joinpath(f'{model_version}', tile_item)
     folder_files_list = os.listdir(detection_folder_aiversion_tile)

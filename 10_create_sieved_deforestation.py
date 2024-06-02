@@ -37,12 +37,11 @@ def create_sieved(result_filepath_for_sieve, result_filepath_sieved, sieve=10):
 
     raster_ds = gdal.Open(str(intermediate_path))
     raster_array = raster_ds.GetRasterBand(1).ReadAsArray()
-    save_raster_template(intermediate_path, result_filepath_sieved, raster_array, data_type=GDT_Byte,)
+    save_raster_template(intermediate_path, result_filepath_sieved, raster_array, data_type=GDT_Byte)
     intermediate_path.unlink()
 
-tiles = ['18LVQ',  '18LVR',  '20LLQ',  '18LWR',  '18NYH',  '18NXH',  '20LLP',  '18NXG',  '20LMQ',  '20NQG']
-tiles = ['18LVQ',  '18LVR',  '20LLQ',  '18LWR',  '18NYH',  '18NXH',  '20LLP',  '18NXG',  '20LMP',  '20LMQ',  '20NQG']
-tiles = ['20LMP']
+tiles = ['18LVQ', '18LVR', '18LWR', '18NXG', '18NXH', '18NYH', '20LLP', '20LLQ', '20LMP', '20LMQ', '20NQF', '20NQG', '20NRG', '21LYG', '21LYH', '22MBT', '22MGB']
+
 
 cutoff_prob = 0.2
 model_version = 'ver7_Segmod'
