@@ -129,6 +129,7 @@ print(y.shape)
 val_steps = val_generator.__len__()
 print(val_steps)
 print("----------------------")
+class_weight = {0: 0.5035927282687647, 1: 70.08500095136921}
 
 # Create the model
 model = build_vgg16_segmentation_bn((256, 256, 15))
@@ -143,7 +144,7 @@ early_stop = EarlyStopping(monitor='val_loss', patience=3, verbose=1, restore_be
 callbacks = [reduce_lr, early_stop]
 
 history = model.fit(train_generator, validation_data=val_generator, epochs=5, callbacks=callbacks,
-                              use_multiprocessing=True,
+                              use_multiprocessing=True, class_weight=class_weight,
                               workers=6
                               )
 

@@ -23,7 +23,7 @@ from copy import copy
 from cnn_architectures import *
 
 
-model_version = 'ver7_Segmod'
+model_version = 'model_build_vgg16_segmentation_batchingestion_200000dataset'
 
 # Path to folders
 cnn_training_folder = Path('/mnt/hddarchive.nfs/amazonas_dir/output/Multiband_mosaic')
@@ -45,7 +45,6 @@ batch_size = 1
 min_labelpixel = 25
 number_of_mosaic = int(timeperiod/mosaic_gap)
 
-model_version = "build_vgg16_segmentation_batchingestion"
 stack_training_in_one = True
 
 

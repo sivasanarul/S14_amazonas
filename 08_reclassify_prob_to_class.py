@@ -11,11 +11,9 @@ import math
 from tondortools.tool import read_raster_info, save_raster, mosaic_tifs, save_raster_template
 import tensorflow as tf
 
-
 tiles = ['18LVQ', '18LVR', '18LWR', '18NXG', '18NXH', '18NYH', '20LLP', '20LLQ', '20LMP', '20LMQ', '20NQF', '20NQG', '20NRG', '21LYG', '21LYH', '22MBT', '22MGB']
-
 cutoff_prob = 0.2
-model_version = 'ver7_Segmod'
+model_version = 'best_build_vgg16_segmentation_batchingestion_labelmorethan120dataset_weighted_f1score'
 amazonas_root_folder = Path("/mnt/hddarchive.nfs/amazonas_dir")
 ########################################################################################################################
 output_folder = amazonas_root_folder.joinpath('output')
@@ -38,18 +36,26 @@ for tile_item in tiles:
 
     detection_folder_aiversion_tile = detection_folder.joinpath(f'{model_version}', tile_item)
     folder_files_list = os.listdir(detection_folder_aiversion_tile)
-    for folder_files_list_item in folder_files_list:
-        if not "_PROB" in folder_files_list_item: continue
 
+    orbit_directions = os.listdir(detection_folder_aiversion_tile)
+    for orbit_direction_item in orbit_directions:
 
-        probablity_filepath = detection_folder_aiversion_tile.joinpath(folder_files_list_item)
-        print(f"reclassifying {probablity_filepath}")
+        if orbit_direction_item not in ['ascending', 'descending']:continue
 
-        dataset = gdal.Open(str(probablity_filepath))
-        chunk = dataset.GetRasterBand(1).ReadAsArray()
+        detection_folder_aiversion_tile_orbit = detection_folder_aiversion_tile.joinpath(orbit_direction_item)
+        mosaic_files = os.listdir(detection_folder_aiversion_tile_orbit)
+        for mosaic_file_item in sorted(mosaic_files):
 
-        mosaic_detection_class_path = probablity_filepath.parent.joinpath(probablity_filepath.name.replace("_PROB", "_CLASS"))
-        prediction_class = (chunk > cutoff_prob).astype(np.byte)
-        save_raster_template(str(probablity_filepath), str(mosaic_detection_class_path),
-                             prediction_class, GDT_Byte, nodata_value=None)
-        print(f"creating {mosaic_detection_class_path}")
+            if not "_PROB" in mosaic_file_item: continue
+
+            probablity_filepath = detection_folder_aiversion_tile_orbit.joinpath(mosaic_file_item)
+            print(f"reclassifying {probablity_filepath}")
+
+            dataset = gdal.Open(str(probablity_filepath))
+            chunk = dataset.GetRasterBand(1).ReadAsArray()
+
+            mosaic_detection_class_path = probablity_filepath.parent.joinpath(probablity_filepath.name.replace("_PROB", "_CLASS"))
+            prediction_class = (chunk < cutoff_prob).astype(np.byte)
+            save_raster_template(str(probablity_filepath), str(mosaic_detection_class_path),
+                                 prediction_class, GDT_Byte, nodata_value=None)
+            print(f"creating {mosaic_detection_class_path}")
