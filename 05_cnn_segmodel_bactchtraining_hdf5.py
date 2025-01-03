@@ -35,16 +35,18 @@ def data_generator(hdf5_file, indices, batch_size):
             batch_labels = hdf5_file['label'][batch_indices]
             yield batch_data_stacked, batch_labels
 
-model_version = 'ver7_Segmod_hdf5_batchtraining'
+model_version = 'ver7_Segmod_hdf5_batchtraining_labelmorethan120'
 batch_size = 100
 learning_rate = 0.001
+class_weight = {0: 0.5035927282687647, 1: 100.08500095136921}
+print(f"Class weights: {class_weight}")
 loss = 'binary_crossentropy'
 
 amazonas_root_folder = Path("/mnt/hddarchive.nfs/amazonas_dir")
 model_folder = amazonas_root_folder.joinpath("model")
 
 # Load the HDF5 file
-file_path = '/mnt/hddarchive.nfs/amazonas_dir/training/hdf5_folder/combined_dataset.hdf5'
+file_path = '/mnt/hddarchive.nfs/amazonas_dir/training/hdf5_folder/combined_dataset_labelmorethan120.hdf5'
 hdf5_file = h5py.File(file_path, 'r')
 
 # Get the size of the datasets
@@ -75,6 +77,7 @@ early_stop = EarlyStopping(monitor='val_loss', patience=5, verbose=1, restore_be
 callbacks = [reduce_lr, early_stop]
 
 history = model.fit_generator(train_generator, validation_data=val_generator, epochs=10, callbacks=callbacks,
+                                class_weight=class_weight,
                     use_multiprocessing=True,
                     workers=2
                     )

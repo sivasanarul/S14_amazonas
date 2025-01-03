@@ -43,8 +43,7 @@ def create_sieved(result_filepath_for_sieve, result_filepath_sieved, sieve=10):
 tiles = ['18LVQ', '18LVR', '18LWR', '18NXG', '18NXH', '18NYH', '20LLP', '20LLQ', '20LMP', '20LMQ', '20NQF', '20NQG', '20NRG', '21LYG', '21LYH', '22MBT', '22MGB']
 
 
-cutoff_prob = 0.2
-model_version = 'ver7_Segmod'
+model_version = 'best_build_vgg16_segmentation_batchingestion_labelmorethan120dataset_weighted_f1score'
 amazonas_root_folder = Path("/mnt/hddarchive.nfs/amazonas_dir")
 ########################################################################################################################
 work_dir = amazonas_root_folder.joinpath("work_dir", "reclassification")
@@ -65,12 +64,13 @@ os.makedirs(detection_folder_aiversion_reclassified_sieved, exist_ok=True)
 
 for tile_item in tiles:
     detection_folder_aiversion = detection_folder_aiversion_parent.joinpath(tile_item, "reclassified")
-    detection_folder_aiversion_reclassified_sieved_tile = detection_folder_aiversion_reclassified_sieved.joinpath(tile_item)
-    os.makedirs(detection_folder_aiversion_reclassified_sieved_tile, exist_ok=True)
+    detection_folder_aiversion_sieved_tile = detection_folder_aiversion_parent.joinpath("final_deforestation", tile_item)
 
     raster_files = os.listdir(detection_folder_aiversion)
+
     for raster_file_item in sorted(raster_files):
-        result_filepath_for_sieve = detection_folder_aiversion.joinpath(raster_file_item)
-        result_filepath_sieved = detection_folder_aiversion_reclassified_sieved_tile.joinpath(raster_file_item)
-        create_sieved(result_filepath_for_sieve, result_filepath_sieved)
+        if raster_file_item.endswith(".tif"):
+            result_filepath_for_sieve = detection_folder_aiversion.joinpath(raster_file_item)
+            result_filepath_sieved = detection_folder_aiversion_sieved_tile.joinpath(raster_file_item)
+            create_sieved(result_filepath_for_sieve, result_filepath_sieved)
 
