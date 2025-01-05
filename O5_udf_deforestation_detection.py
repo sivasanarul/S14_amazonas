@@ -2,12 +2,25 @@ import xarray as xr
 import numpy as np
 from scipy import stats
 from skimage.morphology import remove_small_holes
+from copy import copy
 
 DEBUG = False
 
+def create_nan_mask(numpy_array, vv_vh_bandcount):
+    # Create masks for both VV and VH parts of the array
+    mask_vv = np.isnan(numpy_array[:vv_vh_bandcount]) | (numpy_array[:vv_vh_bandcount] < -99)
+    mask_vh = np.isnan(numpy_array[vv_vh_bandcount:2 * vv_vh_bandcount]) | (
+                numpy_array[vv_vh_bandcount:2 * vv_vh_bandcount] < -99)
 
-def apply_threshold(stat_array, pol_item, DEC_array_threshold, stat_item_name = None):
+    # Combine the masks (element-wise logical OR)
+    combined_mask = mask_vv | mask_vh
+    return combined_mask
 
+def apply_threshold(stat_array, pol_item, DEC_array_threshold, 
+                    stat_item_name = None, previous_stat_array_bool = None):
+
+    stat_array_copy = copy(stat_array)
+    
     if stat_item_name == 'std':
         if pol_item == "VH":
             pol_thr = 2.0
@@ -37,7 +50,8 @@ def apply_threshold(stat_array, pol_item, DEC_array_threshold, stat_item_name = 
         stat_array[stat_array < tstat_thr] = 0
         stat_array[stat_array >= tstat_thr] = 1
         stat_array[np.isnan(stat_array)] = 0
-
+        if previous_stat_array_bool is not None:
+            stat_array[previous_stat_array_bool == 0] = 0
 
     if stat_item_name == 'pval':
         pvalue_thr = 0.1
@@ -46,7 +60,8 @@ def apply_threshold(stat_array, pol_item, DEC_array_threshold, stat_item_name = 
         stat_array[stat_array <= pvalue_thr] = 1
         stat_array[np.isnan(stat_array)] = 2
         stat_array[stat_array == 2] = 0
-
+        if previous_stat_array_bool is not None:
+            stat_array[previous_stat_array_bool == 0] = 0
 
     if stat_item_name == 'ratio_slope':
         stat_thr = 0.025
@@ -78,6 +93,9 @@ def apply_threshold(stat_array, pol_item, DEC_array_threshold, stat_item_name = 
         stat_array[stat_array <= tstat_thr] = 1
         stat_array[stat_array > tstat_thr] = 0
         stat_array[np.isnan(stat_array)] = 0
+        if previous_stat_array_bool is not None:
+            stat_array[previous_stat_array_bool == 0] = 0
+
 
     if stat_item_name == 'ratio_pval':
         pvalue_thr = 0.1
@@ -86,11 +104,12 @@ def apply_threshold(stat_array, pol_item, DEC_array_threshold, stat_item_name = 
         stat_array[stat_array <= pvalue_thr] = 1
         stat_array[np.isnan(stat_array)] = 2
         stat_array[stat_array == 2] = 0
-
+        if previous_stat_array_bool is not None:
+            stat_array[previous_stat_array_bool == 0] = 0
 
 
     DEC_array_threshold += stat_array.astype(int)
-    return DEC_array_threshold
+    return DEC_array_threshold, stat_array_copy, stat_array.astype(int)
 
 
 
@@ -159,12 +178,12 @@ def apply_datacube(cube: xr.DataArray, context: dict) -> xr.DataArray:
         Stack_f_MIN = np.nanmean(numpy_array[pol_stack_future], axis=0)
 
         POL_std = np.nanstd(numpy_array[pol_stack_past + pol_stack_future], axis=0)
-        DEC_array_threshold = apply_threshold(POL_std, pol_item, DEC_array_threshold, stat_item_name= "std")
+        DEC_array_threshold, POL_std, _ = apply_threshold(POL_std, pol_item, DEC_array_threshold, stat_item_name= "std")
         if not DEBUG: del POL_std
 
         ######## MOVING WINDOW TTEST ON STACK
         POL_mean_change = np.subtract(Stack_f_MIN, Stack_p_MIN)
-        DEC_array_threshold = apply_threshold(POL_mean_change, pol_item, DEC_array_threshold, stat_item_name="mean_change")
+        DEC_array_threshold, POL_mean_change, POL_mean_change_bool = apply_threshold(POL_mean_change, pol_item, DEC_array_threshold, stat_item_name="mean_change")
         if not DEBUG: del POL_mean_change
 
         # Perform t-test across bands
@@ -172,10 +191,12 @@ def apply_datacube(cube: xr.DataArray, context: dict) -> xr.DataArray:
                                         numpy_array[pol_stack_future],
                                         axis=0, nan_policy='omit')
         ttest_pvalue, ttest_tstatistic = ttest_results.pvalue, ttest_results.statistic
-        DEC_array_threshold = apply_threshold(ttest_pvalue, pol_item, DEC_array_threshold, stat_item_name= "pval")
-        DEC_array_threshold = apply_threshold(ttest_tstatistic, pol_item, DEC_array_threshold, stat_item_name= "tstat")
+        DEC_array_threshold, ttest_pvalue, _ = apply_threshold(ttest_pvalue, pol_item, DEC_array_threshold,
+                                                          stat_item_name= "pval", previous_stat_array_bool= POL_mean_change_bool)
+        DEC_array_threshold, ttest_tstatistic, _ = apply_threshold(ttest_tstatistic, pol_item, DEC_array_threshold,
+                                                          stat_item_name= "tstat", previous_stat_array_bool= POL_mean_change_bool)
         if not DEBUG: del ttest_results, ttest_pvalue, ttest_tstatistic
-
+        del _, POL_mean_change_bool
 
         if DEBUG:
             combined_metrics = np.stack([
@@ -201,11 +222,15 @@ def apply_datacube(cube: xr.DataArray, context: dict) -> xr.DataArray:
     ## VV - VH
     # vv_vh_r = np.subtract(numpy_array[list(np.arange(vv_vh_bandcount))] -
     #                       numpy_array[list(np.arange(vv_vh_bandcount) + vv_vh_bandcount)])
+    combined_nan_mask = create_nan_mask(numpy_array, vv_vh_bandcount)
     vv_vh_r = numpy_array[:vv_vh_bandcount] - numpy_array[vv_vh_bandcount:2 * vv_vh_bandcount]
+    # Apply the mask to replace corresponding elements in vv_vh_r with NaN
+    vv_vh_r[combined_nan_mask] = np.nan
+
 
     ratio_slope, ratio_r_squared = calculate_lsfit_r(vv_vh_r, vv_vh_bandcount)
-    DEC_array_threshold = apply_threshold(ratio_slope, pol_item, DEC_array_threshold, stat_item_name="ratio_slope")
-    DEC_array_threshold = apply_threshold(ratio_r_squared, pol_item, DEC_array_threshold, stat_item_name="ratio_rsquared")
+    DEC_array_threshold, ratio_slope, _     = apply_threshold(ratio_slope, pol_item, DEC_array_threshold, stat_item_name="ratio_slope")
+    DEC_array_threshold, ratio_r_squared, _ = apply_threshold(ratio_r_squared, pol_item, DEC_array_threshold, stat_item_name="ratio_rsquared")
 
     if not DEBUG:
         del ratio_slope, ratio_r_squared
@@ -214,7 +239,7 @@ def apply_datacube(cube: xr.DataArray, context: dict) -> xr.DataArray:
     ratio_mean_change = (np.nanmean(vv_vh_r[list(np.arange(half_time_steps) + half_time_steps)], axis=0) -
                          np.nanmean(vv_vh_r[list(np.arange(half_time_steps))], axis=0)
                          )
-    DEC_array_threshold = apply_threshold(ratio_mean_change, pol_item, DEC_array_threshold, stat_item_name="ratio_mean_change")
+    DEC_array_threshold, ratio_mean_change, ratio_mean_change_bool = apply_threshold(ratio_mean_change, pol_item, DEC_array_threshold, stat_item_name="ratio_mean_change")
 
     if not DEBUG:
         del ratio_mean_change
@@ -224,13 +249,13 @@ def apply_datacube(cube: xr.DataArray, context: dict) -> xr.DataArray:
                                           vv_vh_r[list(np.arange(half_time_steps) + half_time_steps)],
                                           axis=0, nan_policy='omit')
     # Extract p-value and t-statistic from the result
-    ratio_ttest_pvalue = ratio_ttest_results.pvalue
-    ratio_ttest_tstatistic = ratio_ttest_results.statistic
-    DEC_array_threshold = apply_threshold(ratio_ttest_pvalue, pol_item, DEC_array_threshold, stat_item_name="ratio_pval")
-    DEC_array_threshold = apply_threshold(ratio_ttest_tstatistic, pol_item, DEC_array_threshold, stat_item_name="ratio_tstat")
+    DEC_array_threshold, ratio_ttest_pvalue, _     = apply_threshold(ratio_ttest_results.pvalue, pol_item, DEC_array_threshold,
+                                                                     stat_item_name="ratio_pval", previous_stat_array_bool= ratio_mean_change_bool)
+    DEC_array_threshold, ratio_ttest_tstatistic, _ = apply_threshold(ratio_ttest_results.statistic, pol_item, DEC_array_threshold,
+                                                                     stat_item_name="ratio_tstat", previous_stat_array_bool= ratio_mean_change_bool)
 
     if not DEBUG:
-        del ratio_ttest_results, ratio_ttest_tstatistic, ratio_ttest_pvalue
+        del ratio_ttest_results, ratio_ttest_results, ratio_mean_change_bool, ratio_ttest_pvalue, ratio_ttest_tstatistic
 
 
     if DEBUG:
