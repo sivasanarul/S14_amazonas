@@ -117,4 +117,4 @@ job_options = {
 job = datacube_udf.create_job(out_format="GTiff") #, job_options=job_options)
 job.start_and_wait()
 results = job.get_results()
-results.download_file(f"openeo_detection_21LYG_20210306_sieved12_count3_{resample_method}.tiff")
+results.download_file(f"openeo_detection_21LYG_20210306_sieved12_count3_{resample_method}_withmeanchangeremoved.tiff")
