@@ -255,7 +255,7 @@ def apply_datacube(cube: xr.DataArray, context: dict) -> xr.DataArray:
                                                                      stat_item_name="ratio_tstat", previous_stat_array_bool= ratio_mean_change_bool)
 
     if not DEBUG:
-        del ratio_ttest_results, ratio_ttest_results, ratio_mean_change_bool, ratio_ttest_pvalue, ratio_ttest_tstatistic
+        del ratio_ttest_results, ratio_mean_change_bool, ratio_ttest_pvalue, ratio_ttest_tstatistic
 
 
     if DEBUG:
